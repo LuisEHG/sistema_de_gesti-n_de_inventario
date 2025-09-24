@@ -68,12 +68,12 @@ jobs:
         continue-on-error: true
       
       # Alternativamente, si quieres usar Docker directamente:
-      - name: Run Semgrep Scan
+      - name: Run Semgrep Scan (Docker)
         run: |
-        docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-        semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
-        docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-        semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+            semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+            semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
         continue-on-error: true
       
       - name: Upload Semgrep Report
