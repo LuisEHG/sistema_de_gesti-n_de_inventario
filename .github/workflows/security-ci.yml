@@ -42,8 +42,8 @@ jobs:
   ci-build-push:
     uses: ./.github/workflows/build.yml
     with:
-      image_name: ${{ env.IMAGE_NAME }}
-      container_registry: ${{ env.CONTAINER_REGISTRY }}
+      image_name: app
+      container_registry: docker.io
 
   sast_review:
     needs: build
