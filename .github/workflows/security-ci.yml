@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   sast_review:
-    needs: build
+    needs: build-image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
