@@ -149,7 +149,7 @@ jobs:
 
       - name: Tag and Push Docker Image
         run: |
-          IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USERNAME }}/myapp:latest
+          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/myapp:latest
           echo "Pushing image: $IMAGE_NAME"
-          docker tag inventory-app:${{ github.sha }} "$IMAGE_NAME"
+          docker tag "$DOCKER_IMAGE" "$IMAGE_NAME"
           docker push "$IMAGE_NAME"
