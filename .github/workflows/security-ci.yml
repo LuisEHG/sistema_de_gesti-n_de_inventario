@@ -74,15 +74,20 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/checkout@v4
+      
+      - name: Run Semgrep Scan
+        uses: docker://returntocorp/semgrep
         with:
-          name: docker-image
-
-      - name: Load Docker image
-        run: docker load --input image.tar
+          args: --config auto . --json --output semgrep-report.json
+        continue-on-error: true
+      
+      - name: Upload Semgrep Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
+          retention-days: 7
 
       # --- Escaneo con Snyk (SCA) y Trivy (Escáner de Contenedor) ---
       - name: Run Snyk and Trivy Scans
