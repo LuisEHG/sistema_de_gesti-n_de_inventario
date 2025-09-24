@@ -130,9 +130,9 @@ jobs:
           path: "results-*.html"
           retention-days: 30
         if: always()
-        
+
   push_image:
-    needs: build
+    needs: sca_review
     runs-on: ubuntu-latest
     steps:
       - name: Download Docker Image Artifact
