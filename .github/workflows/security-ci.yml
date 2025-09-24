@@ -37,13 +37,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      # --- Crear directorios de reportes ---
+      - name: Create reports directories
+        run: |
+          mkdir -p ./reports/bandit
+          mkdir -p ./reports/semgrep
 
       # --- Escaneo con Bandit (SAST para Python) ---
       - name: Run Bandit Scan
         uses: docker://python:3.10
         with:
-          args: sh -c "pip install bandit && mkdir -p ./reports/bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
+          args: sh -c "pip install bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
         continue-on-error: true
 
       - name: Upload Bandit Report
@@ -53,12 +59,20 @@ jobs:
           path: ./reports/bandit/
           retention-days: 7
 
-      # --- Escaneo con Semgrep (SAST General) ---
+      # --- Escaneo con Semgrep (SAST General)
       - name: Run Semgrep Scan
-        uses: docker://returntocorp/semgrep
+        uses: returntocorp/semgrep-action@v1
         with:
-          args: --config auto . --json --output ./reports/semgrep/report.json
+          config: auto
+          generateSarif: "1"
         continue-on-error: true
+      
+      # Alternativamente, si quieres usar Docker directamente:
+      # - name: Run Semgrep Scan
+      #   run: |
+      #     docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+      #       semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json
+      #   continue-on-error: true
       
       - name: Upload Semgrep Report
         uses: actions/upload-artifact@v4
@@ -66,6 +80,7 @@ jobs:
           name: semgrep-report
           path: ./reports/semgrep/
           retention-days: 7
+        if: always()
 
   sca_review:
     needs: sast_review
@@ -75,26 +90,49 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      
-      - name: Run Semgrep Scan
-        uses: docker://returntocorp/semgrep
-        with:
-          args: --config auto . --json --output semgrep-report.json
-        continue-on-error: true
-      
-      - name: Upload Semgrep Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-report
-          path: semgrep-report.json
-          retention-days: 7
 
       # --- Escaneo con Snyk (SCA) y Trivy (Escáner de Contenedor) ---
       - name: Run Snyk and Trivy Scans
-        uses: docker://node:18-alpine
-        with:
-          args: sh -c "apk add --no-cache python3 py3-pip python3-dev git && npm install -g snyk snyk-to-html && python3 -m venv venv && source venv/bin/activate && pip install flit && flit install --deps production && pip freeze > requirements.txt && snyk test --file=requirements.txt --package-manager=pip --json > snyk_results.json || true && snyk test --file=requirements.txt --package-manager=pip || true && snyk-to-html -i snyk_results.json -o snyk_results.html || true && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin && /usr/local/bin/trivy image --format json --output trivy_results.json inventory-app:${{ github.sha }} || true"
+        run: |
+          # Instalar dependencias
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip python3-venv
+          
+          # Configurar entorno Python
+          python3 -m venv venv
+          source venv/bin/activate
+          
+          # Instalar Snyk
+          npm install -g snyk snyk-to-html
+          
+          # Preparar requirements.txt
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          else
+            pip freeze > requirements.txt
+          fi
+          
+          # Ejecutar Snyk
+          snyk test --file=requirements.txt --package-manager=pip --json > snyk_results.json || true
+          snyk test --file=requirements.txt --package-manager=pip || true
+          snyk-to-html -i snyk_results.json -o snyk_results.html || true
+          
+          # Instalar y ejecutar Trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          
+          # Cargar la imagen Docker desde el artefacto
+          docker load -i ../build/image.tar || echo "No se pudo cargar la imagen"
+          /usr/local/bin/trivy image --format json --output trivy_results.json inventory-app:${{ github.sha }} || true
         continue-on-error: true
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: ./
+
+      - name: Load Docker image
+        run: docker load -i image.tar
 
       - name: Upload Snyk and Trivy Reports
         uses: actions/upload-artifact@v4
@@ -105,3 +143,4 @@ jobs:
             snyk_results.html
             trivy_results.json
           retention-days: 7
+        if: always()
