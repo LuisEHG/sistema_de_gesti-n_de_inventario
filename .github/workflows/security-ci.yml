@@ -5,7 +5,7 @@ on:
   push
 
 jobs:
-  build_image:
+  Build:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: inventory-app:${{ github.sha }}
@@ -38,3 +38,72 @@ jobs:
           image.tar
           build.env
         retention-days: 1
+
+jobs:
+  sast_review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # --- Escaneo con Bandit (SAST para Python) ---
+      - name: Run Bandit Scan
+        id: bandit_scan
+        uses: docker://python:3.10
+        with:
+          args: sh -c "pip install bandit && mkdir -p ./reports/bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
+        continue-on-error: true
+
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: ./reports/bandit/
+          retention-days: 7
+
+      # --- Escaneo con Semgrep (SAST General) ---
+      - name: Run Semgrep Scan
+        id: semgrep_scan
+        uses: docker://returntocorp/semgrep
+        with:
+          args: --config auto . --json --output ./reports/semgrep/report.json
+        continue-on-error: true
+      
+      - name: Upload Semgrep Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-report
+          path: ./reports/semgrep/
+          retention-days: 7
+
+      # --- Escaneo con Snyk (SCA) ---
+jobs:
+  sca_review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Run Snyk Scan
+        id: snyk_scan
+        uses: docker://node:18-alpine
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: sh -c "apk add --no-cache python3 py3-pip python3-dev git && npm install -g snyk snyk-to-html && python3 -m venv venv && source venv/bin/activate && pip install flit && flit install --deps production && pip freeze > requirements.txt && snyk test --file=requirements.txt --package-manager=pip --json > snyk_results.json || true && snyk test --file=requirements.txt --package-manager=pip || true && snyk-to-html -i snyk_results.json -o snyk_results.html || true"
+        continue-on-error: true
+
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: snyk-report
+          path: snyk_results.json
+          retention-days: 7
+
+      - name: Upload Snyk HTML Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: snyk-html-report
+          path: snyk_results.html
+          retention-days: 7
