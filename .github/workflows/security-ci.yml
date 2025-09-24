@@ -130,3 +130,23 @@ jobs:
           path: "results-*.html"
           retention-days: 30
         if: always()
+        
+  push_image:
+  needs: build_image
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Load Docker Image
+      run: docker load -i image.tar
+
+    - name: Login to GHCR
+      run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+    - name: Tag and Push Docker Image
+      run: |
+        IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USERNAME }}/myapp:latest
+        echo "Pushing image: $IMAGE_NAME"
+        docker tag "$DOCKER_IMAGE" "$IMAGE_NAME"
+        docker push "$IMAGE_NAME"
