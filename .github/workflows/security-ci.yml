@@ -6,7 +6,7 @@ on:
 
 env:
   CONTAINER_REGISTRY: docker.io
-  IMAGE_NAME: luiseduhg   # nombre de tu imagen (sin usuario)
+  IMAGE_NAME: luiseduhg/app   # nombre de tu imagen (sin usuario)
 
 jobs:
   docker:
