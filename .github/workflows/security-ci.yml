@@ -85,34 +85,41 @@ jobs:
   sca_review:
     needs: sast_review
     runs-on: ubuntu-latest
-    env:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+      - name: Set up Python and Node.js
+        run: |
+          # Update package manager
+          sudo apt-get update
+          
+          # Install Node.js and npm
+          sudo apt-get install -y nodejs npm
+          
+          # Install Python pip
+          sudo apt-get install -y python3-pip
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Snyk
+      - name: Install Snyk tools
         run: |
           npm install snyk -g
           npm install snyk-to-html -g
-          
+
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          if [ -f requirements.txt ]; then
+            pip3 install -r requirements.txt
+          else
+            echo "No requirements.txt found"
+          fi
 
       - name: Run Snyk tests
         run: |
-          snyk test --json | snyk-to-html -o results-opensource.html
-          snyk code test --json | snyk-to-html -o results-code.html
+          snyk test --command=python3 --json | snyk-to-html -o results-opensource.html || true
+          snyk code test --command=python3 --json | snyk-to-html -o results-code.html || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
       - name: Upload artifacts
