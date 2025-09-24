@@ -2,9 +2,8 @@
 name: DevSecOps Pipeline
 
 on:
-  push
-  pull_request:
-    branches: [ main, develop ]
+  push:
+    branches: [ master ]
 
 env:
   CONTAINER_REGISTRY: docker.io
