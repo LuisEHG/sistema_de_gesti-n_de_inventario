@@ -164,10 +164,8 @@ jobs:
           echo "Pushing $IMAGE"
           docker push $IMAGE
 
-dast-trivy:
-  needs: push_image
-jobs:
   trivy_scan:
+    needs: push_image 
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
