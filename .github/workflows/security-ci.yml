@@ -6,7 +6,7 @@ on:
 
 env:
   CONTAINER_REGISTRY: docker.io
-  IMAGE_NAME: app   # nombre de tu imagen (sin usuario)
+  IMAGE_NAME: app
 
 jobs:
   docker:
@@ -27,11 +27,7 @@ jobs:
           echo "Building $IMAGE"
           docker build -t $IMAGE .
 
-      - name: Docker push
-        run: |
-          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          echo "Pushing $IMAGE"
-          docker push $IMAGE
+     
 
 
   # sast_review:
@@ -133,18 +129,12 @@ jobs:
   #         retention-days: 30
   #       if: always()
 
-  # push_image:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Docker login
-  #       run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login ${{ env.CONTAINER_REGISTRY }} -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-  #     - name: Docker push
-  #       run: |
-  #         SRC_IMAGE=${{ needs.build_image.outputs.docker_image }}
-  #         DEST_IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-  #         echo "SRC_IMAGE=$SRC_IMAGE"
-  #         echo "Pushing image: $DEST_IMAGE"
-  #         docker tag $SRC_IMAGE $DEST_IMAGE
-  #         docker push $DEST_IMAGE
+  push_image:
+     needs: build
+     runs-on: ubuntu-latest
+     steps:
+      - name: Docker push
+        run: |
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "Pushing $IMAGE"
+          docker push $IMAGE
