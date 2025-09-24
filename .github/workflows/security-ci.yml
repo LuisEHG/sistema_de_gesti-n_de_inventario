@@ -139,6 +139,16 @@ jobs:
      needs: build
      runs-on: ubuntu-latest
      steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      - run: docker load -i image.tar
+
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ env.CONTAINER_REGISTRY }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
       - name: Docker push
         run: |
           IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
