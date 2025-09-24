@@ -133,7 +133,7 @@ jobs:
   #       if: always()
 
   push_image:
-    needs: build_image
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
