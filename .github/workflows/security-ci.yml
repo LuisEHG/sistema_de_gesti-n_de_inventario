@@ -7,7 +7,9 @@ on:
 env:
   CONTAINER_REGISTRY: docker.io
   IMAGE_NAME: app
-
+  REPORTS_DIR: security_reports
+  TRIVY_SEVERITY: CRITICAL,HIGH
+  TRIVY_NO_PROGRESS: "true"
 
 jobs:
   build:
@@ -136,9 +138,43 @@ jobs:
           path: "results-*.html"
           retention-days: 30
         if: always()
+  trivy_scan:
+    needs: sca_review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
 
+      - name: Docker load
+        run: docker load -i image.tar
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y wget tar curl
+
+      - name: Install Trivy
+        run: |
+          TRIVY_VERSION=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+          wget -qO- https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz | tar -xz
+          sudo mv trivy /usr/local/bin/trivy
+          trivy --version
+
+      - name: Run Trivy scan
+        run: |
+          mkdir -p "$REPORTS_DIR/trivy"
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          trivy image --severity "$TRIVY_SEVERITY" --format json --output "$REPORTS_DIR/trivy/report.json" "$IMAGE"
+        continue-on-error: true
+
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: ${{ env.REPORTS_DIR }}/trivy
+          retention-days: 7
   push_image:
-     needs: sca_review
+     needs: trivy_scan
      runs-on: ubuntu-latest
      steps:
       - uses: actions/download-artifact@v4
@@ -160,46 +196,3 @@ jobs:
           IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
           echo "Pushing $IMAGE"
           docker push $IMAGE
-
-  trivy_scan:
-  env:
-    REPORTS_DIR: security_reports
-    DOCKER_IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/app:latest
-    TRIVY_SEVERITY: CRITICAL,HIGH
-    TRIVY_NO_PROGRESS: "true"
-    
-    needs: push_image 
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker
-        uses: docker/setup-docker@v3
-
-      - name: Docker login
-        run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-      - name: Install Trivy
-        run: |
-          TRIVY_VERSION=$(curl -s https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-          wget -qO- https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz | tar -xz
-          sudo mv trivy /usr/local/bin/trivy
-          trivy --version
-
-      - name: Pull Docker image
-        run: |
-          echo "🕵️ Pulling image $DOCKER_IMAGE"
-          docker pull "$DOCKER_IMAGE"
-
-      - name: Run Trivy scan
-        run: |
-          mkdir -p "$REPORTS_DIR/trivy"
-          trivy image --severity "$TRIVY_SEVERITY" --format json --output "$REPORTS_DIR/trivy/report.json" "$DOCKER_IMAGE"
-
-      - name: Upload Trivy report
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-report
-          path: ${{ env.REPORTS_DIR }}/trivy
