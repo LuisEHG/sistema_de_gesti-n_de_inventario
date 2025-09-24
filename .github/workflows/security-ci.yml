@@ -37,104 +37,104 @@ jobs:
      
 
 
-  # sast_review:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout Code
-  #       uses: actions/checkout@v4
+  sast_review:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  #     # --- Crear directorios de reportes ---
-  #     - name: Create reports directories
-  #       run: |
-  #         mkdir -p ./reports/bandit
-  #         mkdir -p ./reports/semgrep
+      # --- Crear directorios de reportes ---
+      - name: Create reports directories
+        run: |
+          mkdir -p ./reports/bandit
+          mkdir -p ./reports/semgrep
 
-  #     # --- Escaneo con Bandit (SAST para Python) ---
-  #     - name: Run Bandit Scan
-  #       uses: docker://python:3.10
-  #       with:
-  #         args: sh -c "pip install bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
-  #       continue-on-error: true
+      # --- Escaneo con Bandit (SAST para Python) ---
+      - name: Run Bandit Scan
+        uses: docker://python:3.10
+        with:
+          args: sh -c "pip install bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
+        continue-on-error: true
 
-  #     - name: Upload Bandit Report
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: bandit-report
-  #         path: ./reports/bandit/
-  #         retention-days: 7
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: ./reports/bandit/
+          retention-days: 7
 
-  #     # --- Escaneo con Semgrep (SAST General)
-  #     - name: Run Semgrep Scan
-  #       uses: returntocorp/semgrep-action@v1
-  #       with:
-  #         config: auto
-  #       continue-on-error: true
+      # --- Escaneo con Semgrep (SAST General)
+      - name: Run Semgrep Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
+        continue-on-error: true
       
-  #     # Alternativamente, si quieres usar Docker directamente:
-  #     - name: Run Semgrep Scan (Docker)
-  #       run: |
-  #         docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-  #           semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
-  #         docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-  #           semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
-  #       continue-on-error: true
+      # Alternativamente, si quieres usar Docker directamente:
+      - name: Run Semgrep Scan (Docker)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+            semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+            semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
+        continue-on-error: true
       
-  #     - name: Upload Semgrep Report
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: semgrep-report
-  #         path: ./reports/semgrep/
-  #         retention-days: 7
-  #       if: always()
+      - name: Upload Semgrep Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: ./reports/semgrep/
+          retention-days: 7
+        if: always()
 
-  # sca_review:
-  #   needs: sast_review
-  #   runs-on: ubuntu-latest
+  sca_review:
+    needs: sast_review
+    runs-on: ubuntu-latest
     
-  #   steps:
-  #     - name: Checkout Code
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  #     - name: Set up Python and Node.js
-  #       run: |
-  #         # Update package manager
-  #         sudo apt-get update
+      - name: Set up Python and Node.js
+        run: |
+          # Update package manager
+          sudo apt-get update
           
-  #         # Install Node.js and npm
-  #         sudo apt-get install -y nodejs npm
+          # Install Node.js and npm
+          sudo apt-get install -y nodejs npm
           
-  #         # Install Python pip
-  #         sudo apt-get install -y python3-pip
+          # Install Python pip
+          sudo apt-get install -y python3-pip
 
-  #     - name: Install Snyk tools
-  #       run: |
-  #         npm install snyk -g
-  #         npm install snyk-to-html -g
+      - name: Install Snyk tools
+        run: |
+          npm install snyk -g
+          npm install snyk-to-html -g
 
-  #     - name: Install Python dependencies
-  #       run: |
-  #         if [ -f requirements.txt ]; then
-  #           pip3 install -r requirements.txt
-  #         else
-  #           echo "No requirements.txt found"
-  #         fi
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip3 install -r requirements.txt
+          else
+            echo "No requirements.txt found"
+          fi
 
-  #     - name: Run Snyk tests
-  #       run: |
-  #         snyk test --command=python3 --json | snyk-to-html -o results-opensource.html || true
-  #         snyk code test --command=python3 --json | snyk-to-html -o results-code.html || true
-  #       env:
-  #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  #       continue-on-error: true
+      - name: Run Snyk tests
+        run: |
+          snyk test --command=python3 --json | snyk-to-html -o results-opensource.html || true
+          snyk code test --command=python3 --json | snyk-to-html -o results-code.html || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
 
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: sast-results
-  #         path: "results-*.html"
-  #         retention-days: 30
-  #       if: always()
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-results
+          path: "results-*.html"
+          retention-days: 30
+        if: always()
 
   push_image:
      needs: build
