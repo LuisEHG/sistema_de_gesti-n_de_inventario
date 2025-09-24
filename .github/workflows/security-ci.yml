@@ -64,7 +64,6 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: auto
-          generateSarif: "1"
         continue-on-error: true
       
       # Alternativamente, si quieres usar Docker directamente:
