@@ -86,61 +86,42 @@ jobs:
     needs: sast_review
     runs-on: ubuntu-latest
     env:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_TOKEN: ${{ SNYK_TOKEN }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # --- Escaneo con Snyk (SCA) y Trivy (Escáner de Contenedor) ---
-      - name: Run Snyk and Trivy Scans
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Snyk
         run: |
-          # Instalar dependencias
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip python3-venv
-          
-          # Configurar entorno Python
-          python3 -m venv venv
-          source venv/bin/activate
-          
-          # Instalar Snyk
-          npm install -g snyk snyk-to-html
-          
-          # Preparar requirements.txt
-          if [ -f "requirements.txt" ]; then
-            pip install -r requirements.txt
-          else
-            pip freeze > requirements.txt
-          fi
-          
-          # Ejecutar Snyk
-          snyk test --file=requirements.txt --package-manager=pip --json > snyk_results.json || true
-          snyk test --file=requirements.txt --package-manager=pip || true
-          snyk-to-html -i snyk_results.json -o snyk_results.html || true
-          
-          # Instalar y ejecutar Trivy
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-          
-          # Cargar la imagen Docker desde el artefacto
-          docker load -i ../build/image.tar || echo "No se pudo cargar la imagen"
-          /usr/local/bin/trivy image --format json --output trivy_results.json inventory-app:${{ github.sha }} || true
+          npm install snyk -g
+          npm install snyk-to-html -g
+
+      - name: Authenticate Snyk
+        run: snyk auth $SNYK_TOKEN
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Snyk tests
+        run: |
+          snyk test --json | snyk-to-html -o results-opensource.html
+          snyk code test --json | snyk-to-html -o results-code.html
         continue-on-error: true
 
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: ./
-
-      - name: Load Docker image
-        run: docker load -i image.tar
-
-      - name: Upload Snyk and Trivy Reports
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: security-reports
-          path: |
-            snyk_results.json
-            snyk_results.html
-            trivy_results.json
-          retention-days: 7
+          name: sast-results
+          path: "results-*.html"
+          retention-days: 30
         if: always()
