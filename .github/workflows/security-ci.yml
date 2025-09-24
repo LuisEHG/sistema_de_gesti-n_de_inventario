@@ -296,7 +296,7 @@ jobs:
           name: trivy-report
           path: ${{ env.REPORTS_DIR }}/trivy
           retention-days: 7
-        if: continue-on-error
+        if: always()
 
   push_image:
     name: Push Docker Image
