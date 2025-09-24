@@ -131,7 +131,7 @@ jobs:
           retention-days: 30
         if: always()
 
-    push_image:
+  push_image:
     needs: sca_review
     runs-on: ubuntu-latest
     steps:
