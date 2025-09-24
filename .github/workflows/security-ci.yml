@@ -11,42 +11,37 @@ env:
   TRIVY_SEVERITY: CRITICAL,HIGH
   TRIVY_NO_PROGRESS: "true"
 
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout código
-#         uses: actions/checkout@v4
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
 
-#       - name: Docker login
-#         run: |
-#           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
-#             ${{ env.CONTAINER_REGISTRY }} \
-#             -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ env.CONTAINER_REGISTRY }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-#       - name: Docker build
-#         run: |
-#           IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-#           echo "Building $IMAGE"
-#           docker build -t $IMAGE .
-#           docker save $IMAGE -o image.tar
+      - name: Docker build
+        run: |
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "Building $IMAGE"
+          docker build -t $IMAGE .
+          docker save $IMAGE -o image.tar
 
-#       - name: Upload Docker image artifact
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: docker-image
-#           path: image.tar
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar
 
      
-jobs:
-  ci-build-push:
-    uses: ./.github/workflows/build.yml
-    with:
-      image_name: app
-      container_registry: docker.io
+
 
   sast_review:
-    needs: ci_build
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -178,27 +173,27 @@ jobs:
           name: trivy-report
           path: ${{ env.REPORTS_DIR }}/trivy
           retention-days: 7
-          
-  # push_image:
-  #    needs: trivy_scan
-  #    runs-on: ubuntu-latest
-  #    steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: docker-image
-  #         path: .
+          continue-on-error: true
+  push_image:
+     needs: trivy_scan
+     runs-on: ubuntu-latest
+     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
 
-  #     - name: Docker load
-  #       run: docker load -i image.tar
+      - name: Docker load
+        run: docker load -i image.tar
 
-  #     - name: Docker login
-  #       run: |
-  #         echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
-  #           ${{ env.CONTAINER_REGISTRY }} \
-  #           -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ env.CONTAINER_REGISTRY }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-  #     - name: Docker push
-  #       run: |
-  #         IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-  #         echo "Pushing $IMAGE"
-  #         docker push $IMAGE
+      - name: Docker push
+        run: |
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "Pushing $IMAGE"
+          docker push $IMAGE
