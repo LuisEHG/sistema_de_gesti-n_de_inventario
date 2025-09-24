@@ -130,7 +130,7 @@ jobs:
           path: "results-*.html"
           retention-days: 30
         if: always()
-        
+  jobs:      
   push_image:
   needs: build_image
   runs-on: ubuntu-latest
