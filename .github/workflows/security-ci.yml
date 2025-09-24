@@ -46,7 +46,7 @@ jobs:
       container_registry: docker.io
 
   sast_review:
-    needs: build
+    needs: ci_build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
