@@ -155,5 +155,5 @@ jobs:
         run: |
           IMAGE_NAME=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/app:latest
           echo "Pushing image: $IMAGE_NAME"
-          docker tag mylocalimage:latest "$IMAGE_NAME"
+          docker tag "$DOCKER_IMAGE" "$IMAGE_NAME"
           docker push "$IMAGE_NAME"
