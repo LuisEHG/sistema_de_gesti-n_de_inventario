@@ -1,8 +1,10 @@
 # .github/workflows/build.yml
-name: Build Docker Image
+name: DevSecOps Pipeline
 
 on:
   push
+  pull_request:
+    branches: [ main, develop ]
 
 env:
   CONTAINER_REGISTRY: docker.io
@@ -10,13 +12,122 @@ env:
   REPORTS_DIR: security_reports
   TRIVY_SEVERITY: CRITICAL,HIGH
   TRIVY_NO_PROGRESS: "true"
+  COVERAGE_THRESHOLD: 80
 
 jobs:
+  # ===== JOB DE TESTING Y COVERAGE =====
+  test:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          # Instalar herramientas de testing
+          pip install pytest pytest-cov pytest-html pytest-xvfb
+
+      - name: Create test directories
+        run: |
+          mkdir -p ./reports/coverage
+          mkdir -p ./reports/tests
+
+      - name: Run Unit Tests with Coverage
+        run: |
+          pytest \
+            --cov=. \
+            --cov-report=html:./reports/coverage/html \
+            --cov-report=xml:./reports/coverage/coverage.xml \
+            --cov-report=term \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} \
+            --html=./reports/tests/report.html \
+            --self-contained-html \
+            --junitxml=./reports/tests/junit.xml \
+            -v
+        continue-on-error: true
+
+      - name: Generate Coverage Badge
+        run: |
+          # Extraer el porcentaje de coverage del reporte XML
+          COVERAGE=$(python -c "
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse('./reports/coverage/coverage.xml')
+              root = tree.getroot()
+              coverage = root.attrib['line-rate']
+              print(f'{float(coverage)*100:.1f}')
+          except:
+              print('0.0')
+          ")
+          echo "COVERAGE_PERCENT=$COVERAGE" >> $GITHUB_ENV
+          echo "Coverage: $COVERAGE%"
+
+      - name: Comment Coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const coverage = process.env.COVERAGE_PERCENT;
+            const threshold = process.env.COVERAGE_THRESHOLD;
+            const status = parseFloat(coverage) >= parseFloat(threshold) ? '✅' : '❌';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📊 Test Coverage Report
+              
+              ${status} **Coverage: ${coverage}%** (Threshold: ${threshold}%)
+              
+              [View detailed coverage report in artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: ./reports/tests/
+          retention-days: 30
+        if: always()
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: ./reports/coverage/
+          retention-days: 30
+        if: always()
+
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: PyTest Results
+          path: ./reports/tests/junit.xml
+          reporter: java-junit
+
+  # ===== JOB DE BUILD (ACTUALIZADO) =====
   build:
+    name: Build Docker Image
+    needs: test  # Dependencia del job de testing
     runs-on: ubuntu-latest
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Docker login
         run: |
@@ -24,12 +135,23 @@ jobs:
             ${{ env.CONTAINER_REGISTRY }} \
             -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Docker build
+      - name: Generate image tags
         run: |
-          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          echo "Building $IMAGE"
-          docker build -t $IMAGE .
-          docker save $IMAGE -o image.tar
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_BASE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          echo "IMAGE_LATEST=${IMAGE_BASE}:latest" >> $GITHUB_ENV
+          echo "IMAGE_SHA=${IMAGE_BASE}:${SHORT_SHA}" >> $GITHUB_ENV
+
+      - name: Docker build and save
+        run: |
+          echo "Building ${{ env.IMAGE_LATEST }}"
+          docker build \
+            --tag ${{ env.IMAGE_LATEST }} \
+            --tag ${{ env.IMAGE_SHA }} \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            .
+          docker save ${{ env.IMAGE_LATEST }} -o image.tar
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
@@ -37,10 +159,9 @@ jobs:
           name: docker-image
           path: image.tar
 
-     
-
-
+  # ===== RESTO DE JOBS (SIN CAMBIOS) =====
   sast_review:
+    name: SAST Security Review
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -92,6 +213,7 @@ jobs:
         if: always()
 
   sca_review:
+    name: SCA Dependencies Review
     needs: sast_review
     runs-on: ubuntu-latest
     
@@ -134,11 +256,13 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sast-results
+          name: sca-results
           path: "results-*.html"
           retention-days: 30
         if: always()
+
   trivy_scan:
+    name: Container Security Scan
     needs: sca_review
     runs-on: ubuntu-latest
     steps:
@@ -173,11 +297,13 @@ jobs:
           name: trivy-report
           path: ${{ env.REPORTS_DIR }}/trivy
           retention-days: 7
-          continue-on-error: true
+        if: continue-on-error
+
   push_image:
-     needs: trivy_scan
-     runs-on: ubuntu-latest
-     steps:
+    name: Push Docker Image
+    needs: trivy_scan
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/download-artifact@v4
         with:
           name: docker-image
