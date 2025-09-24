@@ -1,0 +1,58 @@
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+      container_registry:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ inputs.container_registry }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        run: |
+          IMAGE=${{ inputs.container_registry }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:latest
+          docker build -t $IMAGE .
+          docker save $IMAGE -o image.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar
+
+  push_image:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: .
+
+      - name: Docker load
+        run: docker load -i image.tar
+
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ inputs.container_registry }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Push Docker image
+        run: |
+          IMAGE=${{ inputs.container_registry }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:latest
+          docker push $IMAGE
