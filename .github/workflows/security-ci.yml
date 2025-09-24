@@ -5,7 +5,7 @@ on:
   push
 
 jobs:
-  build_image:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   sast_review:
-    needs: build-image
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
