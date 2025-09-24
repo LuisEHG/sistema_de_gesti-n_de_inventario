@@ -7,10 +7,7 @@ on:
 env:
   CONTAINER_REGISTRY: docker.io
   IMAGE_NAME: app
-  REPORTS_DIR: security_reports
-  DOCKER_IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/app:latest
-  TRIVY_SEVERITY: CRITICAL,HIGH
-  TRIVY_NO_PROGRESS: "true"
+
 
 jobs:
   build:
@@ -165,6 +162,12 @@ jobs:
           docker push $IMAGE
 
   trivy_scan:
+  env:
+    REPORTS_DIR: security_reports
+    DOCKER_IMAGE: ${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/app:latest
+    TRIVY_SEVERITY: CRITICAL,HIGH
+    TRIVY_NO_PROGRESS: "true"
+    
     needs: push_image 
     runs-on: ubuntu-latest
     steps:
