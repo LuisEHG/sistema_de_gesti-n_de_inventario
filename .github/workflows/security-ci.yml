@@ -5,26 +5,36 @@ on:
   push
 env:
   CONTAINER_REGISTRY: docker.io
-  IMAGE_NAME: inventory-app
+  IMAGE_NAME: inventory-app   # nombre de tu imagen (sin usuario)
+
+env:
+  CONTAINER_REGISTRY: docker.io
+  IMAGE_NAME: inventory-app   # nombre de tu imagen (sin usuario)
 
 jobs:
-  build:
+  docker:
     runs-on: ubuntu-latest
-    outputs:
-      docker_image: ${{ steps.build.outputs.image }}
     steps:
-      - name: Checkout code
+      - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Build Docker image
-        id: build
+      - name: Docker login
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          IMAGE_NAME=${{ env.IMAGE_NAME }}:$IMAGE_TAG
-          echo "Building image: $IMAGE_NAME"
-          docker build -t $IMAGE_NAME .
-          # Guardamos el nombre de la imagen como output
-          echo "image=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+            ${{ env.CONTAINER_REGISTRY }} \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Docker build
+        run: |
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "Building $IMAGE"
+          docker build -t $IMAGE .
+
+      - name: Docker push
+        run: |
+          IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "Pushing $IMAGE"
+          docker push $IMAGE
 
 
   # sast_review:
@@ -126,18 +136,18 @@ jobs:
   #         retention-days: 30
   #       if: always()
 
-  push_image:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Docker login
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login ${{ env.CONTAINER_REGISTRY }} -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+  # push_image:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Docker login
+  #       run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login ${{ env.CONTAINER_REGISTRY }} -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Docker push
-        run: |
-          SRC_IMAGE=${{ needs.build_image.outputs.docker_image }}
-          DEST_IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          echo "SRC_IMAGE=$SRC_IMAGE"
-          echo "Pushing image: $DEST_IMAGE"
-          docker tag $SRC_IMAGE $DEST_IMAGE
-          docker push $DEST_IMAGE
+  #     - name: Docker push
+  #       run: |
+  #         SRC_IMAGE=${{ needs.build_image.outputs.docker_image }}
+  #         DEST_IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+  #         echo "SRC_IMAGE=$SRC_IMAGE"
+  #         echo "Pushing image: $DEST_IMAGE"
+  #         docker tag $SRC_IMAGE $DEST_IMAGE
+  #         docker push $DEST_IMAGE
