@@ -13,24 +13,18 @@ jobs:
     outputs:
       docker_image: ${{ steps.build.outputs.image }}
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Docker build
+      - name: Build Docker image
         id: build
         run: |
           IMAGE_TAG=${{ github.sha }}
-          IMAGE_NAME=inventory-app:$IMAGE_TAG
+          IMAGE_NAME=${{ env.IMAGE_NAME }}:$IMAGE_TAG
           echo "Building image: $IMAGE_NAME"
           docker build -t $IMAGE_NAME .
-          docker save $IMAGE_NAME -o image.tar
+          # Guardamos el nombre de la imagen como output
           echo "image=$IMAGE_NAME" >> $GITHUB_OUTPUT
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: image.tar
 
 
   # sast_review:
@@ -136,15 +130,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: .
-
-      - name: Load Docker image
-        run: docker load -i image.tar
-
       - name: Docker login
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login ${{ env.CONTAINER_REGISTRY }} -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
@@ -152,6 +137,7 @@ jobs:
         run: |
           SRC_IMAGE=${{ needs.build_image.outputs.docker_image }}
           DEST_IMAGE=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          echo "SRC_IMAGE=$SRC_IMAGE"
           echo "Pushing image: $DEST_IMAGE"
           docker tag $SRC_IMAGE $DEST_IMAGE
           docker push $DEST_IMAGE
