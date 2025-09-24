@@ -8,7 +8,7 @@ env:
   IMAGE_NAME: inventory-app
 
 jobs:
-  build_image:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
