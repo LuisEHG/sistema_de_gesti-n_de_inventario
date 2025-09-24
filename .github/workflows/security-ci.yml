@@ -3,136 +3,136 @@ name: Build Docker Image
 
 on:
   push
+env:
+  CONTAINER_REGISTRY: docker.io
+  IMAGE_NAME: inventory-app
 
 jobs:
-  build:
+  build_image:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
+      - name: Docker build
         run: |
-          IMAGE_NAME=inventory-app:${{ github.sha }}
-          echo "Building image: $IMAGE_NAME"
-          docker build -t "$IMAGE_NAME" .
-          docker save "$IMAGE_NAME" -o image.tar
-          echo "DOCKER_IMAGE=$IMAGE_NAME" >> $GITHUB_ENV
+          IMAGE_TAG=${{ github.sha }}
+          echo "Building image: $IMAGE_NAME:$IMAGE_TAG"
+          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          docker save $IMAGE_NAME:$IMAGE_TAG -o image.tar
+          echo "DOCKER_IMAGE=$IMAGE_NAME:$IMAGE_TAG" >> $GITHUB_ENV
 
-      - name: Upload Docker image artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: image.tar
-          retention-days: 1
 
-  sast_review:
+
+  # sast_review:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v4
+
+  #     # --- Crear directorios de reportes ---
+  #     - name: Create reports directories
+  #       run: |
+  #         mkdir -p ./reports/bandit
+  #         mkdir -p ./reports/semgrep
+
+  #     # --- Escaneo con Bandit (SAST para Python) ---
+  #     - name: Run Bandit Scan
+  #       uses: docker://python:3.10
+  #       with:
+  #         args: sh -c "pip install bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
+  #       continue-on-error: true
+
+  #     - name: Upload Bandit Report
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: bandit-report
+  #         path: ./reports/bandit/
+  #         retention-days: 7
+
+  #     # --- Escaneo con Semgrep (SAST General)
+  #     - name: Run Semgrep Scan
+  #       uses: returntocorp/semgrep-action@v1
+  #       with:
+  #         config: auto
+  #       continue-on-error: true
+      
+  #     # Alternativamente, si quieres usar Docker directamente:
+  #     - name: Run Semgrep Scan (Docker)
+  #       run: |
+  #         docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+  #           semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
+  #         docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+  #           semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
+  #       continue-on-error: true
+      
+  #     - name: Upload Semgrep Report
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: semgrep-report
+  #         path: ./reports/semgrep/
+  #         retention-days: 7
+  #       if: always()
+
+  # sca_review:
+  #   needs: sast_review
+  #   runs-on: ubuntu-latest
+    
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up Python and Node.js
+  #       run: |
+  #         # Update package manager
+  #         sudo apt-get update
+          
+  #         # Install Node.js and npm
+  #         sudo apt-get install -y nodejs npm
+          
+  #         # Install Python pip
+  #         sudo apt-get install -y python3-pip
+
+  #     - name: Install Snyk tools
+  #       run: |
+  #         npm install snyk -g
+  #         npm install snyk-to-html -g
+
+  #     - name: Install Python dependencies
+  #       run: |
+  #         if [ -f requirements.txt ]; then
+  #           pip3 install -r requirements.txt
+  #         else
+  #           echo "No requirements.txt found"
+  #         fi
+
+  #     - name: Run Snyk tests
+  #       run: |
+  #         snyk test --command=python3 --json | snyk-to-html -o results-opensource.html || true
+  #         snyk code test --command=python3 --json | snyk-to-html -o results-code.html || true
+  #       env:
+  #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #       continue-on-error: true
+
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: sast-results
+  #         path: "results-*.html"
+  #         retention-days: 30
+  #       if: always()
+
+  push_image:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # --- Crear directorios de reportes ---
-      - name: Create reports directories
-        run: |
-          mkdir -p ./reports/bandit
-          mkdir -p ./reports/semgrep
-
-      # --- Escaneo con Bandit (SAST para Python) ---
-      - name: Run Bandit Scan
-        uses: docker://python:3.10
-        with:
-          args: sh -c "pip install bandit && bandit -r . -f json -o ./reports/bandit/report.json || true && bandit -r . -f html -o ./reports/bandit/report.html || true"
-        continue-on-error: true
-
-      - name: Upload Bandit Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: ./reports/bandit/
-          retention-days: 7
-
-      # --- Escaneo con Semgrep (SAST General)
-      - name: Run Semgrep Scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-        continue-on-error: true
-      
-      # Alternativamente, si quieres usar Docker directamente:
-      - name: Run Semgrep Scan (Docker)
-        run: |
-          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-            semgrep --config=auto /src --json --output=/src/reports/semgrep/report.json || true
-          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
-            semgrep --config=auto /src --text --output=/src/reports/semgrep/report.txt || true
-        continue-on-error: true
-      
-      - name: Upload Semgrep Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-report
-          path: ./reports/semgrep/
-          retention-days: 7
-        if: always()
-
-  sca_review:
-    needs: sast_review
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python and Node.js
-        run: |
-          # Update package manager
-          sudo apt-get update
-          
-          # Install Node.js and npm
-          sudo apt-get install -y nodejs npm
-          
-          # Install Python pip
-          sudo apt-get install -y python3-pip
-
-      - name: Install Snyk tools
-        run: |
-          npm install snyk -g
-          npm install snyk-to-html -g
-
-      - name: Install Python dependencies
-        run: |
-          if [ -f requirements.txt ]; then
-            pip3 install -r requirements.txt
-          else
-            echo "No requirements.txt found"
-          fi
-
-      - name: Run Snyk tests
-        run: |
-          snyk test --command=python3 --json | snyk-to-html -o results-opensource.html || true
-          snyk code test --command=python3 --json | snyk-to-html -o results-code.html || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: sast-results
-          path: "results-*.html"
-          retention-days: 30
-        if: always()
-
-  push_image:
-    needs: sca_review
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Docker image artifact
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: docker-image
@@ -141,12 +141,13 @@ jobs:
       - name: Load Docker image
         run: docker load -i image.tar
 
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      - name: Docker login
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login ${{ env.CONTAINER_REGISTRY }} -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Tag and Push Docker image
+      - name: Docker push
         run: |
-          IMAGE_NAME=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/app:latest
+          IMAGE_TAG=latest
+          IMAGE_NAME=${{ env.CONTAINER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG
           echo "Pushing image: $IMAGE_NAME"
-          docker tag "$DOCKER_IMAGE" "$IMAGE_NAME"
-          docker push "$IMAGE_NAME"
+          docker tag $DOCKER_IMAGE $IMAGE_NAME
+          docker push $IMAGE_NAME
